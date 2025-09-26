@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import * as THREE from 'three';
-import { Canvas } from '@react-three/fiber';
 
 function Landing() {
   const [roomId, setRoomId] = useState('');
@@ -19,92 +17,69 @@ function Landing() {
     }
   };
 
-  const copyLink = (id) => {
-    navigator.clipboard.writeText(`${window.location.origin}/room/${id}`);
-  };
-
-  // 3D Cube Component
-  function Cube() {
-    return (
-      <mesh>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color="hotpink" />
-      </mesh>
-    );
-  }
-
   return (
-    <div className="landing">
-      <motion.header
-        initial={{ opacity: 0, y: -50 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h1>CodeConnect</h1>
-        <p>Real-time collaborative coding with friends</p>
-      </motion.header>
+    <div className="landing-page">
+      <header className="landing-header">
+        <div className="logo">CodeConnect</div>
+      </header>
 
-      <motion.div
-        className="hero"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-      >
-        <div className="controls">
-          <button onClick={createRoom} className="btn primary">
-            Create Room
-          </button>
-          <input
-            type="text"
-            placeholder="Enter Room ID"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            className="input"
-          />
-          <button onClick={joinRoom} className="btn secondary">
-            Join Room
-          </button>
-        </div>
+      <main className="landing-main">
+        <motion.div
+          className="title-section"
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <h1 className="main-title">
+            <span className="purple-text">Code Together,</span>
+            <br />
+            <span className="white-text">Create Magic</span>
+          </h1>
+          <p className="subtitle">
+            Real-time collaborative code editing with instant sharing. Write, debug, and build amazing projects with your team.
+          </p>
+        </motion.div>
 
-        <div className="features">
+        <div className="cards-container">
           <motion.div
-            className="feature"
-            whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            className="card create-card"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+            whileHover={{ scale: 1.02 }}
           >
-            <h3>Real-time Sync</h3>
-            <p>Edit code together instantly</p>
+            <h3>Start Coding</h3>
+            <p>Create new room instantly</p>
+            <button onClick={createRoom} className="btn create-btn">
+              Create Room
+            </button>
           </motion.div>
+
           <motion.div
-            className="feature"
-            whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            className="card join-card"
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.7, duration: 0.6 }}
+            whileHover={{ scale: 1.02 }}
           >
-            <h3>Syntax Highlighting</h3>
-            <p>Support for 50+ languages</p>
-          </motion.div>
-          <motion.div
-            className="feature"
-            whileHover={{ scale: 1.05 }}
-            transition={{ type: "spring", stiffness: 400, damping: 10 }}
-          >
-            <h3>Share Links</h3>
-            <p>Invite friends easily</p>
+            <h3>Join Room</h3>
+            <p>Enter room ID to join your team</p>
+            <input
+              type="text"
+              placeholder="Enter room ID"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              className="room-input"
+            />
+            <button onClick={joinRoom} className="btn join-btn">
+              Join Room
+            </button>
           </motion.div>
         </div>
+      </main>
 
-        {/* 3D Modal/Background */}
-        <div className="three-container">
-          <Canvas>
-            <ambientLight intensity={0.5} />
-            <pointLight position={[10, 10, 10]} />
-            <Cube />
-          </Canvas>
-        </div>
-      </motion.div>
-
-      <footer>
-        <p>Future: Chat with emojis, user accounts, friend management</p>
+      <footer className="landing-footer">
+        <p></p>
       </footer>
     </div>
   );
