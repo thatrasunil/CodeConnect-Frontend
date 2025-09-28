@@ -4,7 +4,8 @@ import io from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 import { motion } from 'framer-motion';
 
-const socket = io('http://localhost:5000');
+const backendURL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+const socket = io(backendURL);
 
 function CodeEditor() {
   const { roomId } = useParams();
@@ -22,32 +23,16 @@ function CodeEditor() {
   const [cursors, setCursors] = useState(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [roomEnded, setRoomEnded] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const startTimeRef = useRef(0);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const editorRef = useRef(null);
   const decorationsRef = useRef([]);
   const monacoRef = useRef(null);
-
-  useEffect(() => {
-    // Socket connection status
-    const handleConnect = () => {
-      setConnected(true);
-      console.log('Socket connected');
-    };
-
-    const handleDisconnect = () => {
-      setConnected(false);
-      console.log('Socket disconnected');
-    };
-
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-
-    return () => {
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-    };
-  }, []);
 
   useEffect(() => {
     // Load from localStorage as fallback
@@ -57,7 +42,7 @@ function CodeEditor() {
     if (savedMessages) setMessages(JSON.parse(savedMessages));
 
     // Fetch initial room data on mount for persistence as fallback
-    fetch(`http://localhost:5000/api/room/${roomId}`)
+    fetch(`${backendURL}/api/room/${roomId}`)
       .then(res => res.json())
       .then(data => {
         if (data && data.code !== undefined) {
@@ -69,12 +54,21 @@ function CodeEditor() {
       })
       .catch(err => console.error('Failed to fetch room data:', err));
 
+    const handleConnect = () => setConnected(true);
+    const handleDisconnect = () => setConnected(false);
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
     // Emit join-room after a short delay to ensure connection
     const joinTimeout = setTimeout(() => {
       if (socket.connected) {
         socket.emit('join-room', roomId, socket.id);
+      } else {
+        console.log("Socket not connected, can't join room yet.");
       }
     }, 500);
+
 
     socket.on('room-joined', (data) => {
       setCode(data.code || '');
@@ -85,13 +79,6 @@ function CodeEditor() {
       if (isLoading) setIsLoading(false);
     });
 
-    return () => {
-      clearTimeout(joinTimeout);
-      socket.off('room-joined');
-    };
-  }, [roomId, isLoading]);
-
-  useEffect(() => {
     socket.on('user-joined', (userId) => {
       setUsers(prev => prev + 1);
       setParticipants(prev => [...prev, userId]);
@@ -149,6 +136,8 @@ function CodeEditor() {
     });
 
     return () => {
+      clearTimeout(joinTimeout);
+      socket.off('room-joined');
       socket.off('user-joined');
       socket.off('user-left');
       socket.off('user-count');
@@ -158,8 +147,10 @@ function CodeEditor() {
       socket.off('cursor-update');
       socket.off('cursor-leave');
       socket.off('room-ended');
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
     };
-  }, [roomId]);
+  }, [roomId, isLoading]);
 
   const handleCodeChange = (value) => {
     setCode(value);
@@ -205,11 +196,11 @@ function CodeEditor() {
     const message = {
       id: Date.now() + Math.random(),
       userId,
-      message: messageText,
+      content: messageText,
       timestamp: Date.now()
     };
     setMessages(prev => [...prev, message]); // Add locally for instant feedback
-    socket.emit('send-message', { roomId, id: message.id, message: messageText, userId });
+    socket.emit('send-message', { roomId, id: message.id, content: messageText, userId });
     socket.emit('typing', { roomId, userId: socket.id || 'Guest', isTyping: false });
     setMessageText('');
   };
@@ -236,6 +227,82 @@ function CodeEditor() {
         [emoji]: (prev[messageId]?.[emoji] || 0) + 1
       }
     }));
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      recordedChunksRef.current = [];
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
+        }
+      };
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        sendVoiceMessage(url, blob.size);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const sendVoiceMessage = (fileUrl, duration) => {
+    const userId = socket.id ? socket.id.substring(0, 6) : 'Guest';
+    const message = {
+      id: Date.now() + Math.random(),
+      userId,
+      content: 'Voice message',
+      type: 'voice',
+      fileUrl,
+      duration,
+      timestamp: Date.now()
+    };
+    setMessages(prev => [...prev, message]);
+    socket.emit('send-message', { roomId, id: message.id, content: message.content, userId, type: 'voice', fileUrl, duration });
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const response = await fetch(`${backendURL}/api/upload-file`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await response.json();
+      sendFileMessage(data.fileUrl, file.name);
+    } catch (error) {
+      console.error('Error uploading file:', error);
+    }
+  };
+
+  const sendFileMessage = (fileUrl, content) => {
+    const userId = socket.id ? socket.id.substring(0, 6) : 'Guest';
+    const message = {
+      id: Date.now() + Math.random(),
+      userId,
+      content,
+      type: 'file',
+      fileUrl,
+      timestamp: Date.now()
+    };
+    setMessages(prev => [...prev, message]);
+    socket.emit('send-message', { roomId, id: message.id, content, userId, type: 'file', fileUrl });
   };
 
   const toggleChat = () => {
@@ -293,6 +360,15 @@ function CodeEditor() {
 
   const formatMessage = (msg) => {
     const time = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    let content;
+    if (msg.type === 'voice') {
+      content = <audio controls src={msg.fileUrl} />;
+    } else if (msg.type === 'file') {
+      const isImage = msg.fileUrl.match(/\.(jpeg|jpg|gif|png)$/i);
+      content = isImage ? <img src={msg.fileUrl} alt={msg.content} style={{ maxWidth: '200px' }} /> : <a href={msg.fileUrl} target="_blank" rel="noopener noreferrer">{msg.content}</a>;
+    } else {
+      content = <span className="message-text">{msg.content}</span>;
+    }
     return (
       <motion.div
         key={msg.timestamp}
@@ -302,7 +378,7 @@ function CodeEditor() {
         transition={{ duration: 0.3 }}
       >
         <span className="user-name">{msg.userId}:</span>
-        <span className="message-text">{msg.message}</span>
+        {content}
         <span className="message-time">{time}</span>
         <div className="message-reactions">
           <button onClick={() => addReaction(msg.timestamp, '👍')}>👍</button>
@@ -347,8 +423,9 @@ function CodeEditor() {
 
   if (isLoading) {
     return (
-      <div className="loading-container">
-        <h2>Loading Room: {roomId}...</h2>
+      <div className="loading-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'linear-gradient(135deg, #0a0a0a 0%, #1e293b 100%)', color: '#fff' }}>
+        <div className="loading-spinner"></div>
+        <h2 style={{ marginTop: '1rem' }}>Loading Room: {roomId}...</h2>
         <p>Connecting to the collaborative editor...</p>
       </div>
     );
@@ -482,6 +559,9 @@ function CodeEditor() {
               <button onClick={() => addEmoji('💡')}>💡</button>
             </div>
             <button onClick={() => setMessageText(prev => prev + `\`\`\`\n${code}\n\`\`\``)} className="code-snippet-btn">📄 Code Snippet</button>
+            <button onClick={isRecording ? stopRecording : startRecording} className="voice-btn">{isRecording ? '⏹️ Stop' : '🎤 Voice'}</button>
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
+            <button onClick={() => fileInputRef.current.click()} className="file-btn">📎 File</button>
             <button onClick={sendMessage} className="send-btn">📤 Send</button>
           </div>
         </motion.div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { FaPlus, FaArrowRight, FaCode, FaGlobe, FaComments, FaShare } from 'react-icons/fa';
 
 function Landing() {
   const [roomId, setRoomId] = useState('');
@@ -51,6 +52,7 @@ function Landing() {
             <h3>Start Coding</h3>
             <p>Create new room instantly</p>
             <button onClick={createRoom} className="btn create-btn">
+              <FaPlus style={{ marginRight: '0.5rem' }} />
               Create Room
             </button>
           </motion.div>
@@ -72,10 +74,69 @@ function Landing() {
               className="room-input"
             />
             <button onClick={joinRoom} className="btn join-btn">
+              <FaArrowRight style={{ marginRight: '0.5rem' }} />
               Join Room
             </button>
           </motion.div>
         </div>
+
+        <motion.div
+          className="features-section"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1, duration: 0.8 }}
+        >
+          <h2 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '2rem' }}>Why Choose CodeConnect?</h2>
+          <div className="features-grid">
+            <motion.div
+              className="feature-card"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 1.1, duration: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+            >
+              <FaCode size={40} style={{ color: '#8b5cf6', marginBottom: '1rem' }} />
+              <h3>Real-time Editing</h3>
+              <p>Collaborate in real-time with instant code syncing across all participants.</p>
+            </motion.div>
+
+            <motion.div
+              className="feature-card"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 1.2, duration: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+            >
+              <FaGlobe size={40} style={{ color: '#10b981', marginBottom: '1rem' }} />
+              <h3>Multi-Language Support</h3>
+              <p>Support for multiple programming languages to suit your development needs.</p>
+            </motion.div>
+
+            <motion.div
+              className="feature-card"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 1.3, duration: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+            >
+              <FaComments size={40} style={{ color: '#f59e0b', marginBottom: '1rem' }} />
+              <h3>Integrated Chat</h3>
+              <p>Built-in chat for seamless team communication without leaving the editor.</p>
+            </motion.div>
+
+            <motion.div
+              className="feature-card"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 1.4, duration: 0.5 }}
+              whileHover={{ scale: 1.05 }}
+            >
+              <FaShare size={40} style={{ color: '#ef4444', marginBottom: '1rem' }} />
+              <h3>Easy Sharing</h3>
+              <p>Generate shareable links for quick access and invite collaborators instantly.</p>
+            </motion.div>
+          </div>
+        </motion.div>
       </main>
 
       <footer className="landing-footer">
