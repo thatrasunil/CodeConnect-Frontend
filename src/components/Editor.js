@@ -26,7 +26,6 @@ function CodeEditor() {
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
-  const startTimeRef = useRef(0);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -177,8 +176,13 @@ function CodeEditor() {
     console.log('Code saved locally!');
   };
 
+  // Add more themes for VS Code editor
+  const themes = ['vs-dark', 'light', 'hc-black'];
+
   const toggleTheme = () => {
-    setTheme(prev => prev === 'vs-dark' ? 'light' : 'vs-dark');
+    const currentIndex = themes.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    setTheme(themes[nextIndex]);
   };
 
   const copyLink = () => {
@@ -341,6 +345,7 @@ function CodeEditor() {
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    setIsEditorLoading(false);
 
     editor.onDidChangeCursorPosition((e) => {
       const position = e.position;
