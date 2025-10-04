@@ -24,6 +24,7 @@ function CodeEditor() {
   const [isLoading, setIsLoading] = useState(true);
   const [roomEnded, setRoomEnded] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isEditorLoading, setIsEditorLoading] = useState(true);
   const mediaRecorderRef = useRef(null);
   const recordedChunksRef = useRef([]);
   const fileInputRef = useRef(null);
@@ -345,7 +346,7 @@ function CodeEditor() {
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    setIsEditorLoading(false);
+    setIsLoading(false);
 
     editor.onDidChangeCursorPosition((e) => {
       const position = e.position;
