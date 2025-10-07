@@ -4,7 +4,7 @@ import io from 'socket.io-client';
 import Editor from '@monaco-editor/react';
 import { motion } from 'framer-motion';
 
-const backendURL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:5000';
+const backendURL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
 const socket = io(backendURL);
 
 function CodeEditor() {
@@ -15,7 +15,7 @@ function CodeEditor() {
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [messageReactions, setMessageReactions] = useState({});
@@ -35,24 +35,25 @@ function CodeEditor() {
   const monacoRef = useRef(null);
 
   useEffect(() => {
-    // Load from localStorage as fallback
+    // Load from localStorage immediately
     const savedCode = localStorage.getItem(`code-${roomId}`);
     if (savedCode) setCode(savedCode);
     const savedMessages = localStorage.getItem(`messages-${roomId}`);
     if (savedMessages) setMessages(JSON.parse(savedMessages));
 
-    // Fetch initial room data on mount for persistence as fallback
-    fetch(`${backendURL}/api/room/${roomId}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.code !== undefined) {
-          setCode(data.code || '');
-          setLanguage(data.language || 'javascript');
-          setMessages(data.messages || []);
-          setIsLoading(false);
-        }
-      })
-      .catch(err => console.error('Failed to fetch room data:', err));
+    // Fetch initial room data with timeout (non-blocking)
+    const fetchTimeout = setTimeout(() => {
+      fetch(`${backendURL}/api/room/${roomId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.code !== undefined) {
+            setCode(data.code || '');
+            setLanguage(data.language || 'javascript');
+            setMessages(data.messages || []);
+          }
+        })
+        .catch(err => console.error('Failed to fetch room data:', err));
+    }, 100); // Reduced delay
 
     const handleConnect = () => setConnected(true);
     const handleDisconnect = () => setConnected(false);
@@ -60,15 +61,19 @@ function CodeEditor() {
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
 
-    // Emit join-room after a short delay to ensure connection
-    const joinTimeout = setTimeout(() => {
+    // Emit join-room immediately if connected, or as soon as connected
+    let joinTimeout;
+    const joinRoom = () => {
       if (socket.connected) {
         socket.emit('join-room', roomId, socket.id);
-      } else {
-        console.log("Socket not connected, can't join room yet.");
       }
-    }, 500);
+    };
 
+    if (socket.connected) {
+      joinRoom();
+    } else {
+      socket.once('connect', joinRoom);
+    }
 
     socket.on('room-joined', (data) => {
       setCode(data.code || '');
@@ -76,17 +81,22 @@ function CodeEditor() {
       setMessages(data.messages || []);
       setUsers(data.users || 1);
       setParticipants(data.participants || [socket.id]);
-      if (isLoading) setIsLoading(false);
+      setIsLoading(false); // Set loading false when room data received
     });
 
     socket.on('user-joined', (userId) => {
+      setParticipants(prev => {
+        if (!prev.includes(userId)) {
+          return [...prev, userId];
+        }
+        return prev;
+      });
       setUsers(prev => prev + 1);
-      setParticipants(prev => [...prev, userId]);
     });
 
     socket.on('user-left', (userId) => {
-      setUsers(prev => prev - 1);
       setParticipants(prev => prev.filter(id => id !== userId));
+      setUsers(prev => prev - 1);
     });
 
     socket.on('user-count', (count) => {
@@ -99,7 +109,7 @@ function CodeEditor() {
     });
 
     socket.on('new-message', (message) => {
-      if (message.userId !== (socket.id ? socket.id.substring(0, 6) : 'Guest')) {
+      if (message.userId !== socket.id) {
         setMessages(prev => [...prev, message]);
       }
     });
@@ -197,7 +207,7 @@ function CodeEditor() {
 
   const sendMessage = () => {
     if (!messageText.trim()) return;
-    const userId = socket.id ? socket.id.substring(0, 6) : 'Guest';
+    const userId = socket.id || 'Guest';
     const message = {
       id: Date.now() + Math.random(),
       userId,
@@ -212,7 +222,7 @@ function CodeEditor() {
 
   const handleInputChange = (e) => {
     setMessageText(e.target.value);
-    const safeUserId = socket.id ? socket.id.substring(0, 6) : 'Guest';
+    const safeUserId = socket.id || 'Guest';
     socket.emit('typing', { roomId, userId: safeUserId, isTyping: true });
     clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
@@ -265,7 +275,7 @@ function CodeEditor() {
   };
 
   const sendVoiceMessage = (fileUrl, duration) => {
-    const userId = socket.id ? socket.id.substring(0, 6) : 'Guest';
+    const userId = socket.id || 'Guest';
     const message = {
       id: Date.now() + Math.random(),
       userId,
@@ -297,7 +307,7 @@ function CodeEditor() {
   };
 
   const sendFileMessage = (fileUrl, content) => {
-    const userId = socket.id ? socket.id.substring(0, 6) : 'Guest';
+    const userId = socket.id || 'Guest';
     const message = {
       id: Date.now() + Math.random(),
       userId,
@@ -383,7 +393,7 @@ function CodeEditor() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <span className="user-name">{msg.userId}:</span>
+        <span className="user-name">{msg.userId.substring(0, 6)}:</span>
         {content}
         <span className="message-time">{time}</span>
         <div className="message-reactions">
@@ -501,10 +511,10 @@ function CodeEditor() {
 
         <motion.div className="code-editor-section" variants={itemVariants}>
           <div className="editor-toolbar">
-            <button onClick={runCode} className="toolbar-btn run-btn">▶ Run</button>
-            <button onClick={saveCode} className="toolbar-btn save-btn">💾 Save</button>
-            <button onClick={toggleTheme} className="toolbar-btn theme-btn">🌙 Theme</button>
-            <button onClick={toggleChat} className="toolbar-btn chat-btn">💬 Chat</button>
+          <button onClick={runCode} className="toolbar-btn run-btn">▶ Run</button>
+          <button onClick={saveCode} className="toolbar-btn save-btn">💾 Save</button>
+          <button onClick={toggleTheme} className="toolbar-btn theme-btn">🌙 Theme</button>
+          <button onClick={toggleChat} className="toolbar-btn chat-btn">💬 Chat</button>
           </div>
           <div className="editor-container-wrapper">
             <Editor
